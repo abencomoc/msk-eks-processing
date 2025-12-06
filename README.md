@@ -1,4 +1,4 @@
-# MSK Demo - Event-Driven Financial Transaction Processing
+# MSK EKS Demo - Event-Driven Financial Transaction Processing
 
 ## Introduction
 
