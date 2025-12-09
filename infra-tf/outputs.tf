@@ -39,3 +39,13 @@ output "keda_pod_identity" {
     namespace = module.keda_pod_identity.associations["keda"].namespace
   }
 }
+
+output "region" {
+  description = "AWS region"
+  value       = local.region
+}
+
+output "account_id" {
+  description = "AWS account ID"
+  value       = data.aws_caller_identity.current.account_id
+}
