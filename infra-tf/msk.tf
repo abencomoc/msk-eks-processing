@@ -4,7 +4,7 @@ module "msk_cluster" {
 
   name                   = "msk-demo-cluster"
   kafka_version          = "3.6.0"
-  number_of_broker_nodes = 2
+  number_of_broker_nodes = local.msk_broker_count
 
   broker_node_client_subnets  = module.vpc.private_subnets
   broker_node_instance_type   = "kafka.m5.large"
@@ -25,8 +25,8 @@ module "msk_cluster" {
   configuration_description = "MSK configuration for demo"
   configuration_server_properties = {
     "auto.create.topics.enable"  = true
-    "default.replication.factor" = 2
-    "num.partitions"             = 1000
+    "default.replication.factor" = local.msk_broker_count
+    "num.partitions"             = local.msk_partition_count
   }
 
   tags = local.tags

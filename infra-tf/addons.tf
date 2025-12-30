@@ -77,7 +77,7 @@ resource "helm_release" "keda" {
     }
   })]
 
-  depends_on = [module.eks, module.keda_pod_identity]
+  depends_on = [module.eks, module.keda_pod_identity, resource.helm_release.kube_prometheus_stack]
 }
 
 # Pod Identity for KEDA operator
@@ -109,7 +109,7 @@ resource "helm_release" "kube_prometheus_stack" {
   repository       = "https://prometheus-community.github.io/helm-charts"
   chart            = "kube-prometheus-stack"
   namespace        = "kube-system"
-  version          = "79.11.0"
+  version          = "65.1.1"
 
   values = [yamlencode({
     prometheusOperator = {
@@ -200,7 +200,7 @@ resource "kubectl_manifest" "k8s_yamls" {
   
   yaml_body = file("${path.module}/K8s-yaml/${each.value}")
 
-  depends_on = [helm_release.kube_prometheus_stack]
+  depends_on = [module.eks]
 }
 
 resource "kubectl_manifest" "k8s_templates" {

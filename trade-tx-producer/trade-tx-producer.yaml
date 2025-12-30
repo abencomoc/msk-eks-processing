@@ -21,6 +21,8 @@ spec:
         app: trade-tx-producer
     spec:
       serviceAccountName: producer-sa
+      nodeSelector:
+        kubernetes.io/arch: amd64
       containers:
       - name: producer
         image: ${IMAGE_URI}

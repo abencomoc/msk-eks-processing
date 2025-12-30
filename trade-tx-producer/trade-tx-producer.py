@@ -48,7 +48,14 @@ def create_producer():
         sasl_mechanism='OAUTHBEARER',
         sasl_oauth_token_provider=TokenProvider(REGION),
         value_serializer=lambda v: json.dumps(v).encode('utf-8'),
-        api_version=(2, 5, 0)
+        api_version=(2, 5, 0),
+        # Performance optimizations
+        batch_size=32768,  # 32KB batches
+        linger_ms=5,  # Wait 5ms to batch messages
+        buffer_memory=67108864,  # 64MB buffer
+        max_in_flight_requests_per_connection=10,  # Pipeline requests
+        acks=1,  # Only wait for leader acknowledgment
+        compression_type='gzip'  # Compress batches
     )
 
 def generate_trade():
@@ -69,6 +76,7 @@ def generate_trade():
 def send_messages_continuously():
     producer = create_producer()
     count = 0
+    last_log_time = time.time()
     
     if MESSAGES_PER_SECOND == 0:
         logger.info("Producer paused: MESSAGES_PER_SECOND=0 (not sending messages)")
@@ -79,20 +87,36 @@ def send_messages_continuously():
             logger.info("Stopping producer.")
         return
     
-    delay = 1.0 / MESSAGES_PER_SECOND
+    target_interval = 1.0 / MESSAGES_PER_SECOND
     logger.info(f"Starting continuous producer: {MESSAGES_PER_SECOND} messages/second")
-    logger.info(f"Delay between messages: {delay:.4f} seconds")
+    logger.info(f"Target interval: {target_interval:.6f} seconds")
+    
+    start_time = time.time()
+    next_send_time = start_time
     
     try:
         while True:
-            trade, account_id = generate_trade()
-            producer.send(TOPIC, key=account_id.encode('utf-8'), value=trade)
-            count += 1
+            current_time = time.time()
             
-            if count % 100 == 0:
-                logger.info(f"Sent trades count: {count} - Last: {trade['trade_type']} {trade['quantity']} {trade['symbol']} for {account_id}")
-            
-            time.sleep(delay)
+            # Send message if it's time
+            if current_time >= next_send_time:
+                trade, account_id = generate_trade()
+                producer.send(TOPIC, key=account_id.encode('utf-8'), value=trade)
+                count += 1
+                
+                # Schedule next message
+                next_send_time += target_interval
+                
+                # Log every 5 seconds
+                if current_time - last_log_time >= 5.0:
+                    elapsed = current_time - start_time
+                    actual_rate = count / elapsed if elapsed > 0 else 0
+                    logger.info(f"Sent: {count} messages, Rate: {actual_rate:.1f} msg/s, Target: {MESSAGES_PER_SECOND} msg/s")
+                    last_log_time = current_time
+            else:
+                # Sleep for a short time to avoid busy waiting
+                time.sleep(0.001)  # 1ms sleep
+                
     except KeyboardInterrupt:
         logger.info(f"Stopping producer. Total messages sent: {count}")
     finally:

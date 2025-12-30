@@ -62,13 +62,17 @@ data "aws_region" "current" {}
 data "aws_caller_identity" "current" {}
 
 locals {
-  name   = "msk-demo"
-  region = "us-east-1"
+  name   = var.name
+  region = var.region
 
   cluster_version = "1.34"
 
+  # MSK configuration
+  msk_broker_count = var.az_count
+  msk_partition_count = var.msk_partition_count
+
   vpc_cidr = "10.0.0.0/16"
-  azs      = slice(data.aws_availability_zones.available.names, 0, 2)
+  azs      = slice(data.aws_availability_zones.available.names, 0, var.az_count)
 
   tags = {
     Blueprint  = local.name

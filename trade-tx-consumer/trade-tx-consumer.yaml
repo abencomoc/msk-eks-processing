@@ -4,6 +4,16 @@ metadata:
   name: consumer-sa
   namespace: default
 ---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: trade-tx-consumer-pdb
+spec:
+  maxUnavailable: 90%
+  selector:
+    matchLabels:
+      app: trade-tx-consumer
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -24,6 +34,8 @@ spec:
         prometheus.io/port: "8000"
         prometheus.io/path: "/metrics"
     spec:
+      nodeSelector:
+        kubernetes.io/arch: amd64
       serviceAccountName: consumer-sa
       containers:
       - name: consumer
@@ -90,20 +102,30 @@ spec:
     name: trade-tx-consumer
   minReplicaCount: 0
   maxReplicaCount: 100
-  pollingInterval: 30
-  cooldownPeriod: 120 # Wait for 5m before scaling to 0
+  pollingInterval: 60
+  cooldownPeriod: 300
   advanced:
     horizontalPodAutoscalerConfig:
       behavior:
         scaleDown:
-          tolerance: "0.1"
+          tolerance: "0.5"
           stabilizationWindowSeconds: 120
+          selectPolicy: Max
           policies:
           - type: Percent
-            value: 10
+            value: 50
             periodSeconds: 120
         scaleUp:
-          tolerance: "0.1"
+          tolerance: "0.5"
+          stabilizationWindowSeconds: 120
+          selectPolicy: Min
+          policies:
+          - type: Pods
+            value: 10
+            periodSeconds: 120
+          - type: Percent
+            value: 500
+            periodSeconds: 120
   triggers:
   - type: kafka
     metadata:
@@ -111,12 +133,14 @@ spec:
       consumerGroup: "${CONSUMER_GROUP}"
       topic: "${KAFKA_TOPIC}"
       lagThreshold: "${LAG_THRESHOLD}"
+      # useCachedMetrics: "true"
       awsRegion: "us-east-1"
       tls: enable
       sasl: oauthbearer
       saslTokenProvider: aws_msk_iam
     authenticationRef:  
       name: keda-msk-iam-auth
+
 ---
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor

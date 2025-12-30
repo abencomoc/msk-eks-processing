@@ -57,14 +57,20 @@ class KafkaBatchProcessor:
         conf = {
             'bootstrap.servers': self.bootstrap_servers,
             'group.id': self.group_id,
-            'auto.offset.reset': 'earliest',
+            'auto.offset.reset': 'latest',
             'enable.auto.commit': False,
             'partition.assignment.strategy': 'cooperative-sticky',
             'security.protocol': 'SASL_SSL',
             'sasl.mechanism': 'OAUTHBEARER',
             'oauth_cb': oauth_cb,
-            'session.timeout.ms': 45000,
-            'max.poll.interval.ms': 600000
+            'session.timeout.ms': 10000,  # Faster group coordination
+            'heartbeat.interval.ms': 1000,  # More frequent heartbeats
+            'max.poll.interval.ms': 300000,
+            'fetch.min.bytes': 1,  # Don't wait for large batches
+            'fetch.wait.max.ms': 10,  # Very short wait
+            'max.partition.fetch.bytes': 131072,  # 128KB per partition
+            'connections.max.idle.ms': 540000,  # Keep connections alive
+            'reconnect.backoff.ms': 50  # Fast reconnection
         }
         
         self.consumer = Consumer(conf)
@@ -80,8 +86,6 @@ class KafkaBatchProcessor:
                 
                 for msg in messages:
                     value = json.loads(msg.value().decode('utf-8'))
-                    
-                    logger.info(f"Processing message from partition {msg.partition()}, offset {msg.offset()}")
                     
                     # Calculate message age
                     if msg.timestamp()[1]:
@@ -99,7 +103,7 @@ class KafkaBatchProcessor:
                 if messages:
                     try:
                         self.consumer.commit(asynchronous=False)
-                        logger.info("Successfully committed offsets")
+                        # logger.info("Successfully committed offsets")
                     except KafkaException as e:
                         error_code = e.args[0].code()
                         if error_code in (KafkaError.ILLEGAL_GENERATION, KafkaError._ASSIGNMENT_LOST, KafkaError._NO_OFFSET):
@@ -127,7 +131,7 @@ class KafkaBatchProcessor:
         
         try:
             while True:
-                msg = self.consumer.poll(timeout=0.1)  # Short poll timeout
+                msg = self.consumer.poll(timeout=1.0)  # Longer poll timeout
                 
                 if msg is not None and not msg.error():
                     messages.append(msg)
