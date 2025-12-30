@@ -62,6 +62,14 @@ spec:
           value: "${MESSAGE_PROCESSING_TIME}"
         - name: AWS_REGION
           value: "${AWS_REGION}"
+        readinessProbe:
+          httpGet:
+            path: /metrics
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 3
         resources:
           requests:
             cpu: 100m
@@ -128,6 +136,7 @@ spec:
             periodSeconds: 120
   triggers:
   - type: kafka
+    metricType: AverageValue
     metadata:
       bootstrapServers: "${KAFKA_BOOTSTRAP_SERVERS}"
       consumerGroup: "${CONSUMER_GROUP}"
@@ -140,6 +149,12 @@ spec:
       saslTokenProvider: aws_msk_iam
     authenticationRef:  
       name: keda-msk-iam-auth
+  # - type: prometheus
+  #   # metricType: AverageValue
+  #   metadata:
+  #     serverAddress: http://kube-prometheus-stack-prometheus.kube-system.svc.cluster.local:9090
+  #     query: sum(rate(kafka_server_BrokerTopicMetrics_Count{name="MessagesInPerSec", topic="trade-tx"}[5m]))
+  #     threshold: "100"  # Scale up when incoming rate > 100 msg/s
 
 ---
 apiVersion: monitoring.coreos.com/v1

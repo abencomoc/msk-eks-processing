@@ -1,8 +1,8 @@
-# MSK EKS Demo - Event-Driven Financial Transaction Processing
+# MSK EKS Microbatch Processing with Keda - Demo
 
 ## Introduction
 
-This architecture demonstrates how to process variable financial transaction volumes with speed and cost efficiency. Financial workloads experience dramatic volume fluctuations driven by market events, settlement windows, and cross-border activity—requiring infrastructure that scales elastically while maintaining strict ordering guarantees, audit compliance, and multi-tenant isolation.
+This architecture demonstrates how to process variable transaction volumes with speed and cost efficiency. 
 
 The solution combines **AWS MSK** (managed Kafka) for durable message streaming with **Amazon EKS** and **KEDA** for event-driven autoscaling. It delivers:
 
@@ -36,34 +36,18 @@ Multiple factors add to scaling instability such as Kafka partition rebalancing 
 
 **Critical tuning steps:**
 
-1. **Optimize partition rebalancing** by using cooperative rebalancing in the consumer app
-
-**Cooperative Rebalancing**: During scale events, Kafka redistributes partition assignments across pods. With default "eager" rebalancing, all consumers pause for 30-60 seconds—violating SLAs during critical moments. This demo uses **cooperative rebalancing**, allowing most pods to continue processing while only affected pods pause briefly, ensuring consistent throughput during scaling.
+1. **Optimize partition rebalancing** by using cooperative rebalancing in the consumer app. During scale events, Kafka redistributes partition assignments across pods. With default "eager" rebalancing, all consumers pause for 30-60 seconds—violating SLAs during critical moments. This demo uses **cooperative rebalancing**, allowing most pods to continue processing while only affected pods pause briefly, ensuring consistent throughput during scaling.
 
 2. **Profile your application** to identify:
    - Peak processing capacity per pod (~100 msg/s in this demo)
    - Ramp-up time to reach peak capacity (~60 seconds)
    - Time it takes for partition rebalance to complete and consumers to pick up processing speed again (~60 seconds)
 
-3. **Set conservative timing settings in KEDA ScaledObject yaml**:
-   Consider timing greater than ramp-up times and rebalance times:
-   ```yaml
-   scaleUp:
-     stabilizationWindowSeconds: 90  # 1.5x ramp-up time
-     policies:
-     - type: Percent
-       value: 100    # Double replicas max
-       periodSeconds: 90
-   scaleDown:
-     stabilizationWindowSeconds: 90  # 1.5x ramp-up time
-     policies:
-     - type: Percent
-       value: 25     # Reduce by 25% max
-       periodSeconds: 90
-   tolerance: "0.2"  # Allow 20% variance before scaling
-   ```
-
-This allows the system to stabilize after each scaling event before making the next scaling decision, preventing oscillation during load spikes.
+3. **Tune timing settings**:
+   Consider multiple configuration options for influencing scaling sensitivity:
+   - **Pod initialReadinessDelay**: Allow time for new pods to ramp up before HPA considers them ready
+   - **StabilizationWindowSeconds**: Consider metric values using a rolling window to smooth out fluctuations
+   - **Scaling policy periodSeconds**: Define an upper budget for scaling and wait for a period of time to scale again after the budget is consumed
 
 ## Deployment Steps
 
